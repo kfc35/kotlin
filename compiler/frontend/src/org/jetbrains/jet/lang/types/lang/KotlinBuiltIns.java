@@ -35,8 +35,6 @@ import org.jetbrains.jet.lang.PlatformToKotlinClassMap;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
 import org.jetbrains.jet.lang.psi.JetFile;
-import org.jetbrains.jet.lang.psi.JetImportDirective;
-import org.jetbrains.jet.lang.psi.JetPsiFactory;
 import org.jetbrains.jet.lang.resolve.BindingTrace;
 import org.jetbrains.jet.lang.resolve.BindingTraceContext;
 import org.jetbrains.jet.lang.resolve.DescriptorUtils;
@@ -226,7 +224,7 @@ public class KotlinBuiltIns {
         return new ResolveSession(
                 project,
                 builtInsModule,
-                new SpecialModuleConfiguration(project),
+                new SpecialModuleConfiguration(),
                 new FileBasedDeclarationProviderFactory(files),
                 new Function<FqName, Name>() {
                     @Override
@@ -261,17 +259,12 @@ public class KotlinBuiltIns {
 
     private static class SpecialModuleConfiguration implements ModuleConfiguration {
 
-        private final Project project;
-
-        private SpecialModuleConfiguration(@NotNull Project project) {
-            this.project = project;
+        private SpecialModuleConfiguration() {
         }
 
         @Override
-        public void addDefaultImports(@NotNull Collection<JetImportDirective> directives) {
-            for (ImportPath defaultJetImport : DefaultModuleConfiguration.DEFAULT_JET_IMPORTS) {
-                directives.add(JetPsiFactory.createImportDirective(project, defaultJetImport));
-            }
+        public List<ImportPath> getDefaultImports() {
+            return DefaultModuleConfiguration.DEFAULT_JET_IMPORTS;
         }
 
         @Override

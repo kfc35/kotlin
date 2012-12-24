@@ -88,7 +88,7 @@ public final class AnalyzerFacadeForJS {
                              new DelegatingBindingTrace(libraryBindingContext, "trace for analyzing library in js");
         InjectorForTopDownAnalyzerForJs injector = new InjectorForTopDownAnalyzerForJs(
                 project, topDownAnalysisParameters, trace, owner,
-                new JsConfiguration(project, libraryBindingContext));
+                new JsConfiguration(libraryBindingContext));
         try {
             Collection<JetFile> allFiles = libraryBindingContext != null ?
                                            files :
@@ -142,6 +142,6 @@ public final class AnalyzerFacadeForJS {
         FileBasedDeclarationProviderFactory declarationProviderFactory = new FileBasedDeclarationProviderFactory(
                 Config.withJsLibAdded(files, config), Predicates.<FqName>alwaysFalse());
         ModuleDescriptor lazyModule = new ModuleDescriptor(Name.special("<lazy module>"));
-        return new ResolveSession(config.getProject(), lazyModule, new JsConfiguration(config.getProject(), null), declarationProviderFactory);
+        return new ResolveSession(config.getProject(), lazyModule, new JsConfiguration(null), declarationProviderFactory);
     }
 }

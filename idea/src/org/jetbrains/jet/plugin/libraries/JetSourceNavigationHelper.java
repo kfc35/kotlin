@@ -208,7 +208,7 @@ public class JetSourceNavigationHelper {
         ResolveSession resolveSession = new ResolveSession(
                 project,
                 new ModuleDescriptor(Name.special("<library module>")),
-                DefaultModuleConfiguration.createStandardConfiguration(project),
+                DefaultModuleConfiguration.createStandardConfiguration(),
                 providerFactory);
 
         for (JetNamedDeclaration candidate : candidates) {
