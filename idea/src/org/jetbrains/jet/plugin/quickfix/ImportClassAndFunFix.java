@@ -102,7 +102,7 @@ public class ImportClassAndFunFix extends JetHintAction<JetSimpleNameExpression>
             @Override
             public boolean apply(@Nullable FqName fqName) {
                 assert fqName != null;
-                return ImportInsertHelper.doNeedImport(new ImportPath(fqName, false), null, (JetFile) file);
+                return ImportInsertHelper.doNeedImport(new ImportPath(fqName, false), (JetFile) file);
             }
         });
     }
