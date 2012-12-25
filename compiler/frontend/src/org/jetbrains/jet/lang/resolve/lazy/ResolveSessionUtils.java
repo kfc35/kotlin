@@ -240,7 +240,7 @@ public class ResolveSessionUtils {
         ScopeProvider provider = resolveSession.getInjector().getScopeProvider();
         JetDeclaration parentDeclaration = PsiTreeUtil.getParentOfType(expression, JetDeclaration.class);
         if (parentDeclaration == null) {
-            return provider.getFileScopeWithAllImported((JetFile) expression.getContainingFile());
+            return provider.getFileScope((JetFile) expression.getContainingFile());
         }
         return provider.getResolutionScopeForDeclaration(parentDeclaration);
     }

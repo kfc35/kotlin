@@ -16,81 +16,94 @@
 
 package org.jetbrains.jet.lang.resolve.lazy;
 
-import com.google.common.collect.Lists;
+import com.intellij.openapi.util.NotNullLazyValue;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.lang.descriptors.NamespaceDescriptor;
 import org.jetbrains.jet.lang.psi.*;
-import org.jetbrains.jet.lang.resolve.ImportsResolver;
+import org.jetbrains.jet.lang.resolve.ImportPath;
 import org.jetbrains.jet.lang.resolve.name.FqName;
-import org.jetbrains.jet.lang.resolve.scopes.*;
+import org.jetbrains.jet.lang.resolve.scopes.ChainedScope;
+import org.jetbrains.jet.lang.resolve.scopes.InnerClassesScopeWrapper;
+import org.jetbrains.jet.lang.resolve.scopes.JetScope;
 
-import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.*;
 
 public class ScopeProvider {
-
     private final ResolveSession resolveSession;
+
+    private final Map<JetFile, JetScope> fileScopeWithImportedClassesCache = new WeakHashMap<JetFile, JetScope>();
+
+    private final NotNullLazyValue<JetScope> defaultImportsScope = new NotNullLazyValue<JetScope>() {
+        @NotNull
+        @Override
+        protected JetScope compute() {
+            return createScopeWithDefaultImports();
+        }
+    };
 
     public ScopeProvider(@NotNull ResolveSession resolveSession) {
         this.resolveSession = resolveSession;
     }
 
-    private final Map<JetFile, JetScope> fileScopeWithImportedClassesCache = new WeakHashMap<JetFile, JetScope>();
-    private final Map<JetFile, JetScope> fileScopeWithAllImportedCache = new WeakHashMap<JetFile, JetScope>();
-
     @NotNull
-    public JetScope getFileScopeWithImportedClasses(JetFile file) {
+    public JetScope getFileScope(JetFile file) {
         JetScope scope = fileScopeWithImportedClassesCache.get(file);
         if (scope == null) {
-            scope = createFileScopeWithImportedClasses(file);
+            scope = createFileScope(file);
             fileScopeWithImportedClassesCache.put(file, scope);
         }
         return scope;
     }
 
-    @NotNull
-    public JetScope getFileScopeWithAllImported(JetFile file) {
-        JetScope scope = fileScopeWithAllImportedCache.get(file);
-        if (scope == null) {
-            scope = createFileScopeWithAllImported(file);
-            fileScopeWithAllImportedCache.put(file, scope);
-        }
-        return scope;
-    }
-
-    private JetScope createFileScopeWithImportedClasses(JetFile file) {
-        NamespaceDescriptor packageDescriptor = getFilePackageDescriptor(file);
-
-        WritableScope fileScope = new WritableScopeImpl(
-                JetScope.EMPTY, packageDescriptor, RedeclarationHandler.DO_NOTHING, "File scope for declaration resolution with only classes imported");
-
-        fileScope.changeLockLevel(WritableScope.LockLevel.BOTH);
-
+    private JetScope createFileScope(JetFile file) {
         NamespaceDescriptor rootPackageDescriptor = resolveSession.getPackageDescriptorByFqName(FqName.ROOT);
         if (rootPackageDescriptor == null) {
             throw new IllegalStateException("Root package not found");
         }
 
-        // Don't import twice
-        if (!packageDescriptor.getQualifiedName().equals(FqName.ROOT)) {
-            fileScope.importScope(rootPackageDescriptor.getMemberScope());
-        }
+        NamespaceDescriptor packageDescriptor = getFilePackageDescriptor(file);
 
-        ImportsResolver.processImportsInFile(true, fileScope, Lists.newArrayList(file.getImportDirectives()),
-                                             rootPackageDescriptor.getMemberScope(),
-                                             resolveSession.getModuleConfiguration(), resolveSession.getTrace(),
-                                             resolveSession.getInjector().getQualifiedExpressionResolver(),
-                                             resolveSession.getInjector().getJetPsiBuilder());
+        FileImportDirectiveProvider importProvider = new FileImportDirectiveProvider(
+                file, Collections.<ImportPath>emptyList(), resolveSession.getInjector().getJetPsiBuilder());
 
-        fileScope.changeLockLevel(WritableScope.LockLevel.READING);
+        JetScope importsScope = new LazyImportScope(
+                resolveSession,
+                packageDescriptor,
+                rootPackageDescriptor,
+                importProvider,
+                "Lazy Imports Scope for file " + file.getName());
 
-        return new ChainedScope(packageDescriptor, packageDescriptor.getMemberScope(), fileScope);
+        return new ChainedScope(packageDescriptor,
+                                "File scope: " + file.getName(),
+                                rootPackageDescriptor.getMemberScope(),
+                                packageDescriptor.getMemberScope(),
+                                importsScope,
+                                defaultImportsScope.getValue());
     }
 
+    private JetScope createScopeWithDefaultImports() {
+        NamespaceDescriptor rootPackageDescriptor = resolveSession.getPackageDescriptorByFqName(FqName.ROOT);
+        if (rootPackageDescriptor == null) {
+            throw new IllegalStateException("Root package not found");
+        }
+
+        JetPsiBuilder jetPsiBuilder = resolveSession.getInjector().getJetPsiBuilder();
+        List<ImportPath> defaultImports = resolveSession.getModuleConfiguration().getDefaultImports();
+
+        Collection<JetImportDirective> defaultImportDirectives = jetPsiBuilder.createImportDirectives(defaultImports);
+
+        return new LazyImportScope(
+                resolveSession,
+                rootPackageDescriptor,
+                rootPackageDescriptor,
+                new SimpleImportProvider(defaultImportDirectives),
+                "Lazy default imports scope");
+    }
+
+    @NotNull
     private NamespaceDescriptor getFilePackageDescriptor(JetFile file) {
-        // package
         JetNamespaceHeader header = file.getNamespaceHeader();
         if (header == null) {
             throw new IllegalArgumentException("Scripts are not supported: " + file.getName());
@@ -102,32 +115,8 @@ public class ScopeProvider {
         if (packageDescriptor == null) {
             throw new IllegalStateException("Package not found: " + fqName + " maybe the file is not in scope of this resolve session: " + file.getName());
         }
+
         return packageDescriptor;
-    }
-
-    private JetScope createFileScopeWithAllImported(JetFile file) {
-        JetScope scopeWithImportedClasses = getFileScopeWithImportedClasses(file);
-        NamespaceDescriptor packageDescriptor = getFilePackageDescriptor(file);
-
-        NamespaceDescriptor rootPackageDescriptor = resolveSession.getPackageDescriptorByFqName(FqName.ROOT);
-        if (rootPackageDescriptor == null) {
-            throw new IllegalStateException("Root package not found");
-        }
-
-        WritableScope fileMemberScope = new WritableScopeImpl(
-                JetScope.EMPTY, packageDescriptor, RedeclarationHandler.DO_NOTHING, "File scope for members declaration resolution with non-class imports");
-
-        fileMemberScope.changeLockLevel(WritableScope.LockLevel.BOTH);
-
-        ImportsResolver.processImportsInFile(false, fileMemberScope, Lists.newArrayList(file.getImportDirectives()),
-                                             rootPackageDescriptor.getMemberScope(),
-                                             resolveSession.getModuleConfiguration(), resolveSession.getTrace(),
-                                             resolveSession.getInjector().getQualifiedExpressionResolver(),
-                                             resolveSession.getInjector().getJetPsiBuilder());
-
-        fileMemberScope.changeLockLevel(WritableScope.LockLevel.READING);
-
-        return new ChainedScope(packageDescriptor, scopeWithImportedClasses, fileMemberScope);
     }
 
     @NotNull
@@ -139,7 +128,7 @@ public class ScopeProvider {
 
         JetDeclaration parentDeclaration = PsiTreeUtil.getParentOfType(jetDeclaration, JetDeclaration.class);
         if (parentDeclaration == null) {
-            return getFileScopeWithAllImported((JetFile) elementOfDeclaration.getContainingFile());
+            return getFileScope((JetFile) elementOfDeclaration.getContainingFile());
         }
 
         assert jetDeclaration != null : "Can't happen because of getParentOfType(null, ?) == null";
