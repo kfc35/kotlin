@@ -137,7 +137,10 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements LazyDesc
             scope.changeLockLevel(WritableScope.LockLevel.READING);
 
             PsiElement scopeAnchor = declarationProvider.getOwnerInfo().getScopeAnchor();
-            scopeForClassHeaderResolution = new ChainedScope(this, scope, getScopeProvider().getResolutionScopeForDeclaration(scopeAnchor));
+            scopeForClassHeaderResolution = new ChainedScope(
+                    this,
+                    "ScopeForClassHeaderResolution: " + getName(),
+                    scope, getScopeProvider().getResolutionScopeForDeclaration(scopeAnchor));
         }
         return scopeForClassHeaderResolution;
     }
@@ -149,7 +152,10 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements LazyDesc
             scope.addLabeledDeclaration(this);
             scope.changeLockLevel(WritableScope.LockLevel.READING);
 
-            scopeForMemberDeclarationResolution = new ChainedScope(this, scope, getScopeForMemberLookup(), getScopeForClassHeaderResolution());
+            scopeForMemberDeclarationResolution = new ChainedScope(
+                    this,
+                    "ScopeForMemberDeclarationResolution: " + getName(),
+                    scope, getScopeForMemberLookup(), getScopeForClassHeaderResolution());
         }
         return scopeForMemberDeclarationResolution;
     }
@@ -169,7 +175,10 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements LazyDesc
 
             scope.changeLockLevel(WritableScope.LockLevel.READING);
 
-            scopeForPropertyInitializerResolution = new ChainedScope(this, scope, getScopeForMemberDeclarationResolution());
+            scopeForPropertyInitializerResolution = new ChainedScope(
+                    this,
+                    "ScopeForPropertyInitializerResolution: " + getName(),
+                    scope, getScopeForMemberDeclarationResolution());
         }
         return scopeForPropertyInitializerResolution;
     }
