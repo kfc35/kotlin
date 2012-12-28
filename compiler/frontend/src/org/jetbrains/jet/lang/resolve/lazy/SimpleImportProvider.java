@@ -87,10 +87,10 @@ public class SimpleImportProvider implements ImportDirectivesProvider {
                 allImportsBuilder.add(anImport);
             }
             else {
-                Name aliasName = JetPsiUtil.getAliasName(anImport);
-                if (aliasName != null) {
-                    exactImportMappingBuilder.put(aliasName, anImport);
-                }
+                Name aliasName = path.getImportedName();
+                assert aliasName != null;
+
+                exactImportMappingBuilder.put(aliasName, anImport);
             }
         }
 

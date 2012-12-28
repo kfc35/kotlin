@@ -76,6 +76,15 @@ public final class ImportPath {
         return isAllUnder;
     }
 
+    @Nullable
+    public Name getImportedName() {
+        if (!isAllUnder()) {
+            return alias != null ? alias : fqName.shortName();
+        }
+
+        return null;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
