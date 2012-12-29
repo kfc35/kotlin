@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2012 JetBrains s.r.o.
+ * Copyright 2010-2013 JetBrains s.r.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,7 @@
 
 package org.jetbrains.jet.lang.resolve.lazy;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.ImmutableSetMultimap;
-import com.google.common.collect.Multimap;
+import com.google.common.collect.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.lang.psi.JetImportDirective;
 import org.jetbrains.jet.lang.psi.JetPsiUtil;
@@ -32,7 +29,7 @@ import java.util.List;
 public class SimpleImportProvider implements ImportDirectivesProvider {
     private final Collection<JetImportDirective> importDirectives;
 
-    private Multimap<Name, JetImportDirective> exactImportMapping = null;
+    private ListMultimap<Name, JetImportDirective> exactImportMapping = null;
     private List<JetImportDirective> allUnderImports = null;
     private boolean indexed;
 
@@ -42,31 +39,23 @@ public class SimpleImportProvider implements ImportDirectivesProvider {
 
     @NotNull
     @Override
-    public List<JetImportDirective> getImportDirectives(@NotNull Name name) {
+    public List<JetImportDirective> getExactImports(@NotNull Name name) {
         createIndex();
-
-        assert allUnderImports != null && exactImportMapping != null;
-
-        Collection<JetImportDirective> exactImports = exactImportMapping.get(name);
-        if (exactImports.isEmpty()) {
-            return allUnderImports;
-        }
-
-        return ImmutableList.<JetImportDirective>builder()
-                .addAll(allUnderImports)
-                .addAll(exactImports)
-                .build();
+        return exactImportMapping.get(name);
     }
 
     @NotNull
     @Override
-    public List<JetImportDirective> getAllImports() {
+    public List<JetImportDirective> getAllUnderImports() {
         createIndex();
+        return allUnderImports;
+    }
 
-        return ImmutableList.<JetImportDirective>builder()
-                .addAll(allUnderImports)
-                .addAll(exactImportMapping.values())
-                .build();
+    @NotNull
+    @Override
+    public Collection<JetImportDirective> getAllSingleImports() {
+        createIndex();
+        return exactImportMapping.values();
     }
 
     private void createIndex() {
@@ -74,7 +63,7 @@ public class SimpleImportProvider implements ImportDirectivesProvider {
             return;
         }
 
-        ImmutableMultimap.Builder<Name, JetImportDirective> exactImportMappingBuilder = ImmutableSetMultimap.builder();
+        ImmutableListMultimap.Builder<Name, JetImportDirective> exactImportMappingBuilder = ImmutableListMultimap.builder();
         ImmutableList.Builder<JetImportDirective> allImportsBuilder = ImmutableList.builder();
 
         for (JetImportDirective anImport : importDirectives) {

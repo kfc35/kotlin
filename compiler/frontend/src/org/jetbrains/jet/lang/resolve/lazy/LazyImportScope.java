@@ -16,13 +16,14 @@
 
 package org.jetbrains.jet.lang.resolve.lazy;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-import com.intellij.openapi.util.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.psi.JetImportDirective;
 import org.jetbrains.jet.lang.resolve.Importer;
+import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.LabelName;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.resolve.scopes.JetScope;
@@ -35,21 +36,25 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import static org.jetbrains.jet.lang.resolve.QualifiedExpressionResolver.LookupMode.EVERYTHING;
+
 public class LazyImportScope implements JetScope {
-    @NotNull private final ResolveSession resolveSession;
-    @NotNull private final NamespaceDescriptor packageDescriptor;
-    @NotNull private final ImportDirectivesProvider importProvider;
-    @NotNull private final String debugName;
+    private final ResolveSession resolveSession;
+    private final NamespaceDescriptor packageDescriptor;
+    private final ImportDirectivesProvider importProvider;
+    private final JetScope rootScope;
+    private final String debugName;
 
-    @NotNull private final Set<Pair<JetImportDirective, Boolean>> processedImports = Sets.newHashSet();
+    private boolean areAllSingleProcessed = false;
+    private boolean areAllUnderProcessed = false;
+    private final Set<JetImportDirective> processedDirectives = Sets.newHashSet();
 
-    private final WritableScopeImpl resolveImportScope;
-    private final WritableScopeImpl delegateImportScope;
+    private final WritableScope delegateExactImportScope;
+    private final WritableScope delegateAllSingleImportScope;
 
     public LazyImportScope(
             @NotNull ResolveSession resolveSession,
             @NotNull NamespaceDescriptor packageDescriptor,
-            @NotNull NamespaceDescriptor rootPackageDescriptor,
             @NotNull ImportDirectivesProvider importProvider,
             @NotNull String debugName
     ) {
@@ -58,92 +63,172 @@ public class LazyImportScope implements JetScope {
         this.importProvider = importProvider;
         this.debugName = debugName;
 
-        // Scope for storing all processed imports
-        delegateImportScope = new WritableScopeImpl(
+        delegateExactImportScope = new WritableScopeImpl(
                 JetScope.EMPTY, packageDescriptor, RedeclarationHandler.DO_NOTHING,
-                "Inner scope in " + toString());
-        delegateImportScope.changeLockLevel(WritableScope.LockLevel.BOTH);
+                "Inner scope for exact imports in " + toString());
+        delegateExactImportScope.changeLockLevel(WritableScope.LockLevel.BOTH);
 
-        // Create special scope for resolving imports
-        resolveImportScope = new WritableScopeImpl(
+        delegateAllSingleImportScope = new WritableScopeImpl(
                 JetScope.EMPTY, packageDescriptor, RedeclarationHandler.DO_NOTHING,
-                "Temp scope for import resolve in " + toString());
-        resolveImportScope.importScope(rootPackageDescriptor.getMemberScope());
-        resolveImportScope.changeLockLevel(WritableScope.LockLevel.READING);
+                "Inner scope for all-under imports in " + toString());
+        delegateAllSingleImportScope.changeLockLevel(WritableScope.LockLevel.BOTH);
+
+        NamespaceDescriptor rootPackageDescriptor = resolveSession.getPackageDescriptorByFqName(FqName.ROOT);
+        if (rootPackageDescriptor == null) {
+            throw new IllegalStateException("Root package not found");
+        }
+        rootScope = rootPackageDescriptor.getMemberScope();
     }
 
-    @Nullable
-    @Override
-    public ClassifierDescriptor getClassifier(@NotNull Name name) {
-        processImports(importProvider.getImportDirectives(name), true);
-        return delegateImportScope.getClassifier(name);
+    private void processAllImports() {
+        processAllUnderImports();
+
+        if (areAllSingleProcessed) {
+            return;
+        }
+
+        processImportDirectives(delegateExactImportScope, importProvider.getAllSingleImports());
+
+        areAllSingleProcessed = true;
     }
 
-    private void processImports(Collection<JetImportDirective> directives, final boolean onlyClasses) {
-        Importer.StandardImporter importer = new Importer.StandardImporter(delegateImportScope);
+    private void processImports(Name name) {
+        processAllUnderImports();
 
-        for (JetImportDirective unprocessedImport : directives) {
-            Pair<JetImportDirective, Boolean> processedKey = Pair.create(unprocessedImport, onlyClasses);
-            if (!processedImports.contains(processedKey)) {
+        if (areAllSingleProcessed) {
+            return;
+        }
+
+        processImportDirectives(delegateExactImportScope, importProvider.getExactImports(name));
+    }
+
+    private void processAllUnderImports() {
+        if (areAllUnderProcessed) {
+            return;
+        }
+
+        processImportDirectives(delegateAllSingleImportScope, importProvider.getAllUnderImports());
+
+        areAllUnderProcessed = true;
+    }
+
+    private void processImportDirectives(
+            WritableScope scopeForStorage,
+            Collection<JetImportDirective> directives
+    ) {
+        if (directives.isEmpty()) {
+            return;
+        }
+
+        Importer.StandardImporter importer = new Importer.StandardImporter(scopeForStorage);
+
+        for (JetImportDirective directive : directives) {
+            if (!processedDirectives.contains(directive)) {
                 resolveSession.getInjector().getQualifiedExpressionResolver().processImportReference(
-                        unprocessedImport,
-                        resolveImportScope,
+                        directive,
+                        rootScope,
                         packageDescriptor.getMemberScope(),
                         importer,
                         resolveSession.getTrace(),
-                        resolveSession.getModuleConfiguration(), onlyClasses);
+                        resolveSession.getModuleConfiguration(),
+                        EVERYTHING);
 
-                processedImports.add(processedKey);
+                processedDirectives.add(directive);
             }
         }
     }
 
     @Nullable
     @Override
+    public ClassifierDescriptor getClassifier(@NotNull Name name) {
+        processImports(name);
+
+        ClassDescriptor descriptor = delegateExactImportScope.getObjectDescriptor(name);
+        if (descriptor != null) {
+            return descriptor;
+        }
+
+        return delegateAllSingleImportScope.getObjectDescriptor(name);
+    }
+
+    @Nullable
+    @Override
     public ClassDescriptor getObjectDescriptor(@NotNull Name name) {
-        processImports(importProvider.getImportDirectives(name), true);
-        return delegateImportScope.getObjectDescriptor(name);
+        processImports(name);
+
+        ClassDescriptor descriptor = delegateExactImportScope.getObjectDescriptor(name);
+        if (descriptor != null) {
+            return descriptor;
+        }
+
+        return delegateAllSingleImportScope.getObjectDescriptor(name);
     }
 
     @NotNull
     @Override
     public Collection<ClassDescriptor> getObjectDescriptors() {
-        processImports(importProvider.getAllImports(), true);
-        return delegateImportScope.getObjectDescriptors();
+        processAllImports();
+
+        return ImmutableList.<ClassDescriptor>builder()
+                .addAll(delegateExactImportScope.getObjectDescriptors())
+                .addAll(delegateAllSingleImportScope.getObjectDescriptors())
+                .build();
     }
 
     @Nullable
     @Override
     public NamespaceDescriptor getNamespace(@NotNull Name name) {
-        processImports(importProvider.getImportDirectives(name), true);
-        return delegateImportScope.getNamespace(name);
+        processImports(name);
+
+        NamespaceDescriptor descriptor = delegateExactImportScope.getNamespace(name);
+        if (descriptor != null) {
+            return descriptor;
+        }
+
+        return delegateAllSingleImportScope.getNamespace(name);
     }
 
     @NotNull
     @Override
     public Collection<VariableDescriptor> getProperties(@NotNull Name name) {
-        processImports(importProvider.getImportDirectives(name), false);
-        return delegateImportScope.getProperties(name);
+        processImports(name);
+
+        return ImmutableList.<VariableDescriptor>builder()
+                .addAll(delegateExactImportScope.getProperties(name))
+                .addAll(delegateAllSingleImportScope.getProperties(name))
+                .build();
     }
 
     @Nullable
     @Override
     public VariableDescriptor getLocalVariable(@NotNull Name name) {
-        processImports(importProvider.getImportDirectives(name), false);
-        return delegateImportScope.getLocalVariable(name);
+        // TODO: Can we import local variables?
+
+        processImports(name);
+
+        VariableDescriptor descriptor = delegateExactImportScope.getLocalVariable(name);
+        if (descriptor != null) {
+            return descriptor;
+        }
+
+        return delegateAllSingleImportScope.getLocalVariable(name);
     }
 
     @NotNull
     @Override
     public Collection<FunctionDescriptor> getFunctions(@NotNull Name name) {
-        processImports(importProvider.getImportDirectives(name), false);
-        return delegateImportScope.getFunctions(name);
+        processImports(name);
+
+        return ImmutableList.<FunctionDescriptor>builder()
+                .addAll(delegateExactImportScope.getFunctions(name))
+                .addAll(delegateAllSingleImportScope.getFunctions(name))
+                .build();
     }
 
     @NotNull
     @Override
     public DeclarationDescriptor getContainingDeclaration() {
-        return delegateImportScope.getContainingDeclaration();
+        return packageDescriptor;
     }
 
     @NotNull
@@ -155,14 +240,18 @@ public class LazyImportScope implements JetScope {
     @Nullable
     @Override
     public PropertyDescriptor getPropertyByFieldReference(@NotNull Name fieldName) {
-        throw new UnsupportedOperationException();
+        return null;
     }
 
     @NotNull
     @Override
     public Collection<DeclarationDescriptor> getAllDescriptors() {
-        processImports(importProvider.getAllImports(), true);
-        return delegateImportScope.getAllDescriptors();
+        processAllImports();
+
+        return ImmutableList.<DeclarationDescriptor>builder()
+                .addAll(delegateExactImportScope.getAllDescriptors())
+                .addAll(delegateAllSingleImportScope.getAllDescriptors())
+                .build();
     }
 
     @NotNull

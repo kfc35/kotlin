@@ -65,13 +65,11 @@ public class ScopeProvider {
 
         NamespaceDescriptor packageDescriptor = getFilePackageDescriptor(file);
 
-        FileImportDirectiveProvider importProvider = new FileImportDirectiveProvider(
-                file, Collections.<ImportPath>emptyList(), resolveSession.getInjector().getJetPsiBuilder());
+        SimpleImportProvider importProvider = new SimpleImportProvider(file.getImportDirectives());
 
         JetScope importsScope = new LazyImportScope(
                 resolveSession,
                 packageDescriptor,
-                rootPackageDescriptor,
                 importProvider,
                 "Lazy Imports Scope for file " + file.getName());
 
@@ -96,7 +94,6 @@ public class ScopeProvider {
 
         return new LazyImportScope(
                 resolveSession,
-                rootPackageDescriptor,
                 rootPackageDescriptor,
                 new SimpleImportProvider(defaultImportDirectives),
                 "Lazy default imports scope");

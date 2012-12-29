@@ -20,12 +20,16 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.lang.psi.JetImportDirective;
 import org.jetbrains.jet.lang.resolve.name.Name;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface ImportDirectivesProvider {
     @NotNull
-    List<JetImportDirective> getImportDirectives(@NotNull Name name);
+    List<JetImportDirective> getExactImports(@NotNull Name name);
 
     @NotNull
-    List<JetImportDirective> getAllImports();
+    List<JetImportDirective> getAllUnderImports();
+
+    @NotNull
+    Collection<JetImportDirective> getAllSingleImports();
 }
