@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2012 JetBrains s.r.o.
+ * Copyright 2010-2013 JetBrains s.r.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import static org.jetbrains.jet.lang.resolve.QualifiedExpressionResolver.LookupMode.EVERYTHING;
+import static org.jetbrains.jet.lang.resolve.QualifiedExpressionResolver.LookupMode;
 
 public class LazyImportScope implements JetScope {
     private final ResolveSession resolveSession;
@@ -49,8 +49,8 @@ public class LazyImportScope implements JetScope {
     private boolean areAllUnderProcessed = false;
     private final Set<JetImportDirective> processedDirectives = Sets.newHashSet();
 
-    private final WritableScope delegateExactImportScope;
-    private final WritableScope delegateAllSingleImportScope;
+    private final WritableScope delegateSingleImportsScope;
+    private final WritableScope delegateAllUnderImportsScope;
 
     public LazyImportScope(
             @NotNull ResolveSession resolveSession,
@@ -63,15 +63,15 @@ public class LazyImportScope implements JetScope {
         this.importProvider = importProvider;
         this.debugName = debugName;
 
-        delegateExactImportScope = new WritableScopeImpl(
+        delegateSingleImportsScope = new WritableScopeImpl(
                 JetScope.EMPTY, packageDescriptor, RedeclarationHandler.DO_NOTHING,
                 "Inner scope for exact imports in " + toString());
-        delegateExactImportScope.changeLockLevel(WritableScope.LockLevel.BOTH);
+        delegateSingleImportsScope.changeLockLevel(WritableScope.LockLevel.BOTH);
 
-        delegateAllSingleImportScope = new WritableScopeImpl(
+        delegateAllUnderImportsScope = new WritableScopeImpl(
                 JetScope.EMPTY, packageDescriptor, RedeclarationHandler.DO_NOTHING,
                 "Inner scope for all-under imports in " + toString());
-        delegateAllSingleImportScope.changeLockLevel(WritableScope.LockLevel.BOTH);
+        delegateAllUnderImportsScope.changeLockLevel(WritableScope.LockLevel.BOTH);
 
         NamespaceDescriptor rootPackageDescriptor = resolveSession.getPackageDescriptorByFqName(FqName.ROOT);
         if (rootPackageDescriptor == null) {
@@ -87,7 +87,7 @@ public class LazyImportScope implements JetScope {
             return;
         }
 
-        processImportDirectives(delegateExactImportScope, importProvider.getAllSingleImports());
+        processImportDirectives(delegateSingleImportsScope, importProvider.getAllSingleImports());
 
         areAllSingleProcessed = true;
     }
@@ -99,7 +99,7 @@ public class LazyImportScope implements JetScope {
             return;
         }
 
-        processImportDirectives(delegateExactImportScope, importProvider.getExactImports(name));
+        processImportDirectives(delegateSingleImportsScope, importProvider.getExactImports(name));
     }
 
     private void processAllUnderImports() {
@@ -107,7 +107,7 @@ public class LazyImportScope implements JetScope {
             return;
         }
 
-        processImportDirectives(delegateAllSingleImportScope, importProvider.getAllUnderImports());
+        processImportDirectives(delegateAllUnderImportsScope, importProvider.getAllUnderImports());
 
         areAllUnderProcessed = true;
     }
@@ -131,7 +131,7 @@ public class LazyImportScope implements JetScope {
                         importer,
                         resolveSession.getTrace(),
                         resolveSession.getModuleConfiguration(),
-                        EVERYTHING);
+                        LookupMode.ONLY_CLASSES);
 
                 processedDirectives.add(directive);
             }
@@ -143,12 +143,12 @@ public class LazyImportScope implements JetScope {
     public ClassifierDescriptor getClassifier(@NotNull Name name) {
         processImports(name);
 
-        ClassDescriptor descriptor = delegateExactImportScope.getObjectDescriptor(name);
+        ClassDescriptor descriptor = delegateSingleImportsScope.getObjectDescriptor(name);
         if (descriptor != null) {
             return descriptor;
         }
 
-        return delegateAllSingleImportScope.getObjectDescriptor(name);
+        return delegateAllUnderImportsScope.getClassifier(name);
     }
 
     @Nullable
@@ -156,12 +156,12 @@ public class LazyImportScope implements JetScope {
     public ClassDescriptor getObjectDescriptor(@NotNull Name name) {
         processImports(name);
 
-        ClassDescriptor descriptor = delegateExactImportScope.getObjectDescriptor(name);
+        ClassDescriptor descriptor = delegateSingleImportsScope.getObjectDescriptor(name);
         if (descriptor != null) {
             return descriptor;
         }
 
-        return delegateAllSingleImportScope.getObjectDescriptor(name);
+        return delegateAllUnderImportsScope.getObjectDescriptor(name);
     }
 
     @NotNull
@@ -170,8 +170,8 @@ public class LazyImportScope implements JetScope {
         processAllImports();
 
         return ImmutableList.<ClassDescriptor>builder()
-                .addAll(delegateExactImportScope.getObjectDescriptors())
-                .addAll(delegateAllSingleImportScope.getObjectDescriptors())
+                .addAll(delegateSingleImportsScope.getObjectDescriptors())
+                .addAll(delegateAllUnderImportsScope.getObjectDescriptors())
                 .build();
     }
 
@@ -180,12 +180,12 @@ public class LazyImportScope implements JetScope {
     public NamespaceDescriptor getNamespace(@NotNull Name name) {
         processImports(name);
 
-        NamespaceDescriptor descriptor = delegateExactImportScope.getNamespace(name);
+        NamespaceDescriptor descriptor = delegateSingleImportsScope.getNamespace(name);
         if (descriptor != null) {
             return descriptor;
         }
 
-        return delegateAllSingleImportScope.getNamespace(name);
+        return delegateAllUnderImportsScope.getNamespace(name);
     }
 
     @NotNull
@@ -194,8 +194,8 @@ public class LazyImportScope implements JetScope {
         processImports(name);
 
         return ImmutableList.<VariableDescriptor>builder()
-                .addAll(delegateExactImportScope.getProperties(name))
-                .addAll(delegateAllSingleImportScope.getProperties(name))
+                .addAll(delegateSingleImportsScope.getProperties(name))
+                .addAll(delegateAllUnderImportsScope.getProperties(name))
                 .build();
     }
 
@@ -206,12 +206,12 @@ public class LazyImportScope implements JetScope {
 
         processImports(name);
 
-        VariableDescriptor descriptor = delegateExactImportScope.getLocalVariable(name);
+        VariableDescriptor descriptor = delegateSingleImportsScope.getLocalVariable(name);
         if (descriptor != null) {
             return descriptor;
         }
 
-        return delegateAllSingleImportScope.getLocalVariable(name);
+        return delegateAllUnderImportsScope.getLocalVariable(name);
     }
 
     @NotNull
@@ -220,8 +220,8 @@ public class LazyImportScope implements JetScope {
         processImports(name);
 
         return ImmutableList.<FunctionDescriptor>builder()
-                .addAll(delegateExactImportScope.getFunctions(name))
-                .addAll(delegateAllSingleImportScope.getFunctions(name))
+                .addAll(delegateSingleImportsScope.getFunctions(name))
+                .addAll(delegateAllUnderImportsScope.getFunctions(name))
                 .build();
     }
 
@@ -249,8 +249,8 @@ public class LazyImportScope implements JetScope {
         processAllImports();
 
         return ImmutableList.<DeclarationDescriptor>builder()
-                .addAll(delegateExactImportScope.getAllDescriptors())
-                .addAll(delegateAllSingleImportScope.getAllDescriptors())
+                .addAll(delegateSingleImportsScope.getAllDescriptors())
+                .addAll(delegateAllUnderImportsScope.getAllDescriptors())
                 .build();
     }
 
