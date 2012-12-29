@@ -33,7 +33,7 @@ import java.util.*;
 public class ScopeProvider {
     private final ResolveSession resolveSession;
 
-    private final Map<JetFile, JetScope> fileScopeWithImportedClassesCache = new WeakHashMap<JetFile, JetScope>();
+    private final Map<JetFile, JetScope> fileScopes = new WeakHashMap<JetFile, JetScope>();
 
     private final NotNullLazyValue<JetScope> defaultImportsScope = new NotNullLazyValue<JetScope>() {
         @NotNull
@@ -49,10 +49,10 @@ public class ScopeProvider {
 
     @NotNull
     public JetScope getFileScope(JetFile file) {
-        JetScope scope = fileScopeWithImportedClassesCache.get(file);
+        JetScope scope = fileScopes.get(file);
         if (scope == null) {
             scope = createFileScope(file);
-            fileScopeWithImportedClassesCache.put(file, scope);
+            fileScopes.put(file, scope);
         }
         return scope;
     }
