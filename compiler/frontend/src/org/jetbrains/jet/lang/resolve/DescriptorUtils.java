@@ -229,11 +229,6 @@ public class DescriptorUtils {
         }
     }
 
-    public static boolean isTopLevelNamespace(@NotNull NamespaceDescriptor namespaceDescriptor) {
-        return namespaceDescriptor.getContainingDeclaration() instanceof NamespaceDescriptor
-                && namespaceDescriptor.getContainingDeclaration().getContainingDeclaration() instanceof ModuleDescriptor;
-    }
-
     public static boolean isRootNamespace(@NotNull NamespaceDescriptor namespaceDescriptor) {
         return namespaceDescriptor.getContainingDeclaration() instanceof ModuleDescriptor;
     }
@@ -398,7 +393,7 @@ public class DescriptorUtils {
 
     public static boolean isExternallyAccessible(PropertyDescriptor propertyDescriptor) {
         return propertyDescriptor.getVisibility() != Visibilities.PRIVATE || isClassObject(propertyDescriptor.getContainingDeclaration())
-               || propertyDescriptor.getContainingDeclaration() instanceof NamespaceDescriptor;
+               || isTopLevelDeclaration(propertyDescriptor);
     }
 
     @NotNull
