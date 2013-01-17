@@ -1,6 +1,7 @@
-namespace test
+package test
 
-internal final class test.PropType : jet.Any {
-    public final /*primary constructor*/ fun <init>(): test.PropType
+internal val checkTypeProp : test.PropType?
+
+internal final class PropType {
+    /*primary*/ public constructor PropType()
 }
-internal final val checkTypeProp: test.PropType?

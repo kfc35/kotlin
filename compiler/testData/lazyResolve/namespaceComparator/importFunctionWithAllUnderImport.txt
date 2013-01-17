@@ -1,6 +1,7 @@
-namespace test
+package test
 
-internal final class test.B : testOther.A {
-    public final /*primary constructor*/ fun <init>(): test.B
+internal val inferTypeFromImportedFun : jet.Int
+
+internal final class B : testOther.A {
+    /*primary*/ public constructor B()
 }
-internal final val inferTypeFromImportedFun: jet.Int
