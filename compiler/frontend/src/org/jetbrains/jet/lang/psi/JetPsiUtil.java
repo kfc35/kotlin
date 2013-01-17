@@ -17,6 +17,7 @@
 package org.jetbrains.jet.lang.psi;
 
 import com.google.common.base.Function;
+import com.google.common.collect.Lists;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiElement;
@@ -24,6 +25,7 @@ import com.intellij.psi.impl.CheckUtil;
 import com.intellij.psi.impl.source.codeStyle.CodeEditUtil;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.JetNodeTypes;
@@ -206,6 +208,24 @@ public class JetPsiUtil {
         }
 
         return firstPart.child(name);
+    }
+
+    /** @return <code>null</code> iff the tye has syntactic errors */
+    @Nullable
+    public static FqName toQualifiedName(@NotNull JetUserType userType) {
+        List<String> names = Lists.newArrayList();
+
+        JetUserType current = userType;
+        while (current != null) {
+            String name = current.getReferencedName();
+            if (name == null) return null;
+
+            names.add(name);
+            current = current.getQualifier();
+        }
+
+        String fqName = StringUtil.join(ContainerUtil.reverse(names), ".");
+        return new FqName(fqName);
     }
 
     @Nullable
