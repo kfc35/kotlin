@@ -87,9 +87,8 @@ public class LazyImportScope implements JetScope {
             return;
         }
 
-        processImportDirectives(delegateSingleImportsScope, importProvider.getAllSingleImports());
-
         areAllSingleProcessed = true;
+        processImportDirectives(delegateSingleImportsScope, importProvider.getAllSingleImports());
     }
 
     private void processImports(Name name) {
@@ -107,9 +106,8 @@ public class LazyImportScope implements JetScope {
             return;
         }
 
-        processImportDirectives(delegateAllUnderImportsScope, importProvider.getAllUnderImports());
-
         areAllUnderProcessed = true;
+        processImportDirectives(delegateAllUnderImportsScope, importProvider.getAllUnderImports());
     }
 
     private void processImportDirectives(
@@ -123,7 +121,7 @@ public class LazyImportScope implements JetScope {
         Importer.StandardImporter importer = new Importer.StandardImporter(scopeForStorage);
 
         for (JetImportDirective directive : directives) {
-            if (!processedDirectives.contains(directive)) {
+            if (processedDirectives.add(directive)) {
                 resolveSession.getInjector().getQualifiedExpressionResolver().processImportReference(
                         directive,
                         rootScope,
@@ -131,9 +129,7 @@ public class LazyImportScope implements JetScope {
                         importer,
                         resolveSession.getTrace(),
                         resolveSession.getModuleConfiguration(),
-                        LookupMode.ONLY_CLASSES);
-
-                processedDirectives.add(directive);
+                        LookupMode.EVERYTHING);
             }
         }
     }
@@ -143,7 +139,7 @@ public class LazyImportScope implements JetScope {
     public ClassifierDescriptor getClassifier(@NotNull Name name) {
         processImports(name);
 
-        ClassDescriptor descriptor = delegateSingleImportsScope.getObjectDescriptor(name);
+        ClassifierDescriptor descriptor = delegateSingleImportsScope.getClassifier(name);
         if (descriptor != null) {
             return descriptor;
         }
