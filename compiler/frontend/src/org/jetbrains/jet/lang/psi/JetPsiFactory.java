@@ -246,4 +246,9 @@ public class JetPsiFactory {
 
         return assignment;
     }
+
+    public static JetExpression createFunctionBody(Project project, @NotNull String bodyText) {
+        JetFunction func = createFunction(project, "fun foo() {\n" + bodyText + "\n}");
+        return func.getBodyExpression();
+    }
 }
