@@ -389,6 +389,11 @@ public class QuickFixTestGenerated extends AbstractQuickFixTest {
                 doTest("idea/testData/quickfix/createFromUsage/component/beforeCreateComponentFromUsage2.kt");
             }
             
+            @TestMetadata("beforeCreateComponentFromUsage3.kt")
+            public void testCreateComponentFromUsage3() throws Exception {
+                doTest("idea/testData/quickfix/createFromUsage/component/beforeCreateComponentFromUsage3.kt");
+            }
+            
         }
         
         @TestMetadata("idea/testData/quickfix/createFromUsage/get")
@@ -496,6 +501,11 @@ public class QuickFixTestGenerated extends AbstractQuickFixTest {
             @TestMetadata("beforeCreateIteratorFromUsage2.kt")
             public void testCreateIteratorFromUsage2() throws Exception {
                 doTest("idea/testData/quickfix/createFromUsage/iterator/beforeCreateIteratorFromUsage2.kt");
+            }
+            
+            @TestMetadata("beforeCreateIteratorFromUsage3.kt")
+            public void testCreateIteratorFromUsage3() throws Exception {
+                doTest("idea/testData/quickfix/createFromUsage/iterator/beforeCreateIteratorFromUsage3.kt");
             }
             
         }
