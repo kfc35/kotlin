@@ -29,47 +29,64 @@ import com.intellij.refactoring.rename.inplace.MyLookupExpression;
 import com.intellij.util.IncorrectOperationException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
-import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
+import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.descriptors.impl.MutableClassDescriptor;
 import org.jetbrains.jet.lang.diagnostics.Diagnostic;
-import org.jetbrains.jet.lang.psi.JetDotQualifiedExpression;
-import org.jetbrains.jet.lang.psi.JetFile;
-import org.jetbrains.jet.lang.psi.JetReferenceExpression;
-import org.jetbrains.jet.lang.psi.JetSuperExpression;
+import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
+import org.jetbrains.jet.lang.types.JetType;
 import org.jetbrains.jet.lang.types.checker.JetTypeChecker;
 import org.jetbrains.jet.plugin.JetBundle;
 import org.jetbrains.jet.plugin.caches.resolve.KotlinCacheManager;
 import org.jetbrains.jet.plugin.caches.resolve.KotlinCacheManagerUtil;
 import org.jetbrains.jet.plugin.project.AnalyzerFacadeWithCache;
+import org.jetbrains.jet.plugin.references.JetSimpleNameReference;
 import org.jetbrains.jet.renderer.DescriptorRenderer;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
 
 public class SpecifySuperExplicitlyFix extends JetIntentionAction<JetSuperExpression> {
+    private final LinkedHashSet<MutableClassDescriptor> superClassDescs;
+    private final JetTypeReference expectedType;
 
-    public SpecifySuperExplicitlyFix(@NotNull JetSuperExpression element) {
+    public SpecifySuperExplicitlyFix(@NotNull JetSuperExpression element, @NotNull LinkedHashSet<MutableClassDescriptor> superClassDescs,
+            @Nullable JetTypeReference expectedType) {
         super(element);
+        this.superClassDescs = superClassDescs;
+        this.expectedType = expectedType;
     }
 
     @NotNull
     @Override
     public String getText() {
-        return "";
+        return JetBundle.message("specify.super.explicitly");
     }
 
     @NotNull
     @Override
     public String getFamilyName() {
-        return JetBundle.message("map.platform.class.to.kotlin.family");
+        return JetBundle.message("specify.super.explicitly.family");
     }
 
     @Override
     public void invoke(@NotNull Project project, Editor editor, PsiFile file) {
-        BindingContext contextClass = KotlinCacheManagerUtil.getDeclarationsFromProject(element).getBindingContext();
+        BindingContext contextClasses = KotlinCacheManagerUtil.getDeclarationsFromProject(element).getBindingContext();
         BindingContext contextExpressions = AnalyzerFacadeWithCache.analyzeFileWithCache((JetFile) file).getBindingContext();
+        LinkedHashSet<String> options = new LinkedHashSet<String>();
+
+        for (MutableClassDescriptor classDesc : superClassDescs) {
+            for (CallableMemberDescriptor memberDesc : classDesc.getAllCallableMembers()) {
+                if (memberDesc instanceof FunctionDescriptor) {
+                    //TODO applying square brackets.
+                    System.out.println(memberDesc + " is a function with return type " + memberDesc.getReturnType());
+                }
+                else if (memberDesc instanceof PropertyDescriptor) {
+                    //TODO applying square brackets.
+                    System.out.println(memberDesc + " is a property with type " + ((PropertyDescriptor) memberDesc).getType().toString());
+                }
+            }
+        }
 
 
         //JetTypeChecker.INSTANCE.isSubtypeOf()
@@ -85,20 +102,46 @@ public class SpecifySuperExplicitlyFix extends JetIntentionAction<JetSuperExpres
                 if (superExp == null) {
                     return null;
                 }
-                //Get the superclasses?
 
-                JetDotQualifiedExpression wholeExp = PsiTreeUtil.getParentOfType(superExp, JetDotQualifiedExpression.class);
+                JetClass klass = QuickFixUtil.getParentElementOfType(diagnostic, JetClass.class);
+                JetDelegationSpecifierList superClasses = PsiTreeUtil.getChildOfType(klass, JetDelegationSpecifierList.class);
+                if (superClasses == null) {
+                    return null;
+                }
+
+                //Fetch class descriptors for all super classes
+                BindingContext contextClasses = KotlinCacheManagerUtil.getDeclarationsFromProject(superExp).getBindingContext();
+                LinkedHashSet<MutableClassDescriptor> superClassDescs = new LinkedHashSet<MutableClassDescriptor>();
+                for (JetDelegationSpecifier delSpec : superClasses.getDelegationSpecifiers()) {
+                    JetSimpleNameExpression jetRef = PsiTreeUtil.findChildOfType(delSpec.getTypeReference(), JetSimpleNameExpression.class);
+                    if (jetRef == null) {
+                        continue;
+                    }
+                    MutableClassDescriptor classDesc = resolveToClass(jetRef, contextClasses);
+                    if (classDesc != null) {
+                        superClassDescs.add(classDesc);
+                    }
+                }
+
+                //Get the name of the member in question
+                JetDotQualifiedExpression wholeExp = QuickFixUtil.getParentElementOfType(diagnostic, JetDotQualifiedExpression.class);
                 if (wholeExp == null) {
                     return null;
                 }
-                //TODO do square brackets
-                return null;
+
+                //Get the type of the expression if applicable (e.g. var a : Int = super.foo)
+                JetProperty assignment = PsiTreeUtil.getParentOfType(wholeExp, JetProperty.class);
+                JetTypeReference expectedType = null;
+                if (assignment != null) {
+                    expectedType = assignment.getTypeRef();
+                }
+
+                return new SpecifySuperExplicitlyFix(superExp, superClassDescs, expectedType);
             }
         };
     }
 
     /*Taken and modified from MapPlatformClassToKotlinFix*/
-    //TODO change replacedElements to one element
     private static void buildAndShowTemplate(
             Project project, Editor editor, PsiFile file,
             PsiElement replacedElement, LinkedHashSet<String> options
