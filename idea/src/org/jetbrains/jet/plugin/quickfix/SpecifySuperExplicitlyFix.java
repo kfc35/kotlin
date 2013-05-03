@@ -48,13 +48,20 @@ import java.util.LinkedHashSet;
 
 public class SpecifySuperExplicitlyFix extends JetIntentionAction<JetSuperExpression> {
     private final LinkedHashSet<MutableClassDescriptor> superClassDescs;
+    private final PsiElement elementToReplace;
     private final JetTypeReference expectedType;
+    private final String memberName;
+    private final JetValueArgumentList valArgs;
 
     public SpecifySuperExplicitlyFix(@NotNull JetSuperExpression element, @NotNull LinkedHashSet<MutableClassDescriptor> superClassDescs,
-            @Nullable JetTypeReference expectedType) {
+            @NotNull PsiElement elementToReplace, @Nullable JetTypeReference expectedType, @NotNull String memberName,
+            @Nullable JetValueArgumentList valArgs) {
         super(element);
         this.superClassDescs = superClassDescs;
+        this.elementToReplace = elementToReplace;
         this.expectedType = expectedType;
+        this.memberName = memberName;
+        this.valArgs = valArgs;
     }
 
     @NotNull
@@ -71,8 +78,14 @@ public class SpecifySuperExplicitlyFix extends JetIntentionAction<JetSuperExpres
 
     @Override
     public void invoke(@NotNull Project project, Editor editor, PsiFile file) {
-        BindingContext contextClasses = KotlinCacheManagerUtil.getDeclarationsFromProject(element).getBindingContext();
+        //BindingContext contextClasses = KotlinCacheManagerUtil.getDeclarationsFromProject(element).getBindingContext();
         BindingContext contextExpressions = AnalyzerFacadeWithCache.analyzeFileWithCache((JetFile) file).getBindingContext();
+
+        JetType expectedJetType = null;
+        if (expectedType != null) {
+            expectedJetType = contextExpressions.get(BindingContext.TYPE, expectedType);
+            System.out.println("expected Jet Type = " + expectedJetType);
+        }
         LinkedHashSet<String> options = new LinkedHashSet<String>();
 
         for (MutableClassDescriptor classDesc : superClassDescs) {
@@ -80,10 +93,20 @@ public class SpecifySuperExplicitlyFix extends JetIntentionAction<JetSuperExpres
                 if (memberDesc instanceof FunctionDescriptor) {
                     //TODO applying square brackets.
                     System.out.println(memberDesc + " is a function with return type " + memberDesc.getReturnType());
+                    if (memberDesc.getName().getName().equals(memberName)) {
+                        System.out.println("member name matches for this function!");
+                        if (memberDesc.getModality() == Modality.ABSTRACT) {
+                            continue;
+                        }
+
+                    }
                 }
                 else if (memberDesc instanceof PropertyDescriptor) {
-                    //TODO applying square brackets.
                     System.out.println(memberDesc + " is a property with type " + ((PropertyDescriptor) memberDesc).getType().toString());
+                    if (memberDesc.getName().getName().equals(memberName)) {
+                        System.out.println("member name matches for this property!");
+
+                    }
                 }
             }
         }
@@ -119,24 +142,46 @@ public class SpecifySuperExplicitlyFix extends JetIntentionAction<JetSuperExpres
                     }
                     MutableClassDescriptor classDesc = resolveToClass(jetRef, contextClasses);
                     if (classDesc != null) {
+                        System.out.println("classDesc = " + classDesc);
                         superClassDescs.add(classDesc);
                     }
                 }
 
-                //Get the name of the member in question
-                JetDotQualifiedExpression wholeExp = QuickFixUtil.getParentElementOfType(diagnostic, JetDotQualifiedExpression.class);
-                if (wholeExp == null) {
+                //Get the name of the member in question and other access information
+                JetDotQualifiedExpression dotExp = QuickFixUtil.getParentElementOfType(diagnostic, JetDotQualifiedExpression.class);
+                //TODO play around with array stuff...
+                JetArrayAccessExpression arrayExp = PsiTreeUtil.getTopmostParentOfType(dotExp, JetArrayAccessExpression.class);
+                JetValueArgumentList valArgs = null;
+                String memberName = null;
+                if (dotExp == null) {
                     return null;
                 }
+                JetCallExpression call = PsiTreeUtil.getChildOfType(dotExp, JetCallExpression.class);
+                if (call != null) {
+                    JetSimpleNameExpression name = PsiTreeUtil.getChildOfType(call, JetSimpleNameExpression.class);
+                    if (name == null) {
+                        return null;
+                    }
+                    memberName = name.getText();
+                    valArgs = call.getValueArgumentList();
+                }
+                else {
+                    JetSimpleNameExpression name = PsiTreeUtil.getChildOfType(dotExp, JetSimpleNameExpression.class);
+                    if (name == null) {
+                        return null;
+                    }
+                    memberName = name.getText();
+                }
+                System.out.println(memberName);
 
                 //Get the type of the expression if applicable (e.g. var a : Int = super.foo)
-                JetProperty assignment = PsiTreeUtil.getParentOfType(wholeExp, JetProperty.class);
+                JetProperty assignment = PsiTreeUtil.getParentOfType(dotExp, JetProperty.class);
                 JetTypeReference expectedType = null;
                 if (assignment != null) {
                     expectedType = assignment.getTypeRef();
                 }
 
-                return new SpecifySuperExplicitlyFix(superExp, superClassDescs, expectedType);
+                return new SpecifySuperExplicitlyFix(superExp, superClassDescs, dotExp, expectedType, memberName, valArgs);
             }
         };
     }
