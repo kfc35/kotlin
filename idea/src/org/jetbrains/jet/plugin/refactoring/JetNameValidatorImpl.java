@@ -29,7 +29,7 @@ import org.jetbrains.jet.lang.psi.JetVisitorVoid;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.plugin.project.WholeProjectAnalyzerFacade;
 
-import java.util.*;
+import java.util.Collection;
 
 /**
  * User: Alefas
@@ -53,7 +53,6 @@ public class JetNameValidatorImpl implements JetNameValidator {
     private final PsiElement myContainer;
     private PsiElement myAnchor;
     BindingContext myBindingContext;
-    private final Set<String> extraConflictingNames = new HashSet<String>();
 
     public JetNameValidatorImpl(PsiElement container, PsiElement anchor) {
         myContainer = container;
@@ -70,13 +69,7 @@ public class JetNameValidatorImpl implements JetNameValidator {
         }
     }
 
-    public void addExtraConflictingName(String name) {
-        extraConflictingNames.add(name);
-    }
-
     private boolean validateInner(String name) {
-        if (extraConflictingNames.contains(name)) return false;
-
         PsiElement sibling;
         if (myAnchor != null) {
             sibling = myAnchor;
