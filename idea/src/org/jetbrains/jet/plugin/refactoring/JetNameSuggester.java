@@ -77,6 +77,24 @@ public class JetNameSuggester {
         if (result.isEmpty()) addName(result, "value", validator);
         return ArrayUtil.toStringArray(result);
     }
+
+    public static String[] suggestNamesForType(JetType jetType, JetNameValidator validator) {
+        ArrayList<String> result = new ArrayList<String>();
+        addNamesForType(result, jetType, validator);
+        return ArrayUtil.toStringArray(result);
+    }
+
+    public static String[] suggestNamesForExpression(JetExpression expression, JetNameValidator validator) {
+        ArrayList<String> result = new ArrayList<String>();
+        addNamesForExpression(result, expression, validator);
+        return ArrayUtil.toStringArray(result);
+    }
+
+    public static String suggestGenericName(JetNameValidator validator) {
+        ArrayList<String> result = new ArrayList<String>();
+        addName(result, "value", validator);
+        return result.get(0);
+    }
     
     private static void addNamesForType(ArrayList<String> result, JetType jetType, JetNameValidator validator) {
         KotlinBuiltIns builtIns = KotlinBuiltIns.getInstance();
