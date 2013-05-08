@@ -21,6 +21,7 @@ import com.google.common.collect.Multimap;
 import com.intellij.codeInsight.intention.IntentionAction;
 import org.jetbrains.jet.lang.diagnostics.AbstractDiagnosticFactory;
 import org.jetbrains.jet.lang.psi.JetClass;
+import org.jetbrains.jet.lexer.JetTokens;
 import org.jetbrains.jet.plugin.codeInsight.ImplementMethodsHandler;
 
 import java.util.Collection;
@@ -136,8 +137,10 @@ public class QuickFixes {
         factories.put(SUPERTYPE_NOT_INITIALIZED, ChangeToConstructorInvocationFix.createFactory());
         factories.put(FUNCTION_CALL_EXPECTED, ChangeToFunctionInvocationFix.createFactory());
 
-        factories.put(INVISIBLE_MEMBER, ChangeVisibilityModifierOfDeclarationFix.createFactory());
-        
+        factories.put(INVISIBLE_MEMBER, ChangeVisibilityModifierOfDeclarationFix.createFactory(JetTokens.PUBLIC_KEYWORD, "public"));
+        factories.put(INVISIBLE_MEMBER, ChangeVisibilityModifierOfDeclarationFix.createFactory(JetTokens.PROTECTED_KEYWORD, "protected"));
+        factories.put(INVISIBLE_MEMBER, ChangeVisibilityModifierOfDeclarationFix.createFactory(JetTokens.INTERNAL_KEYWORD, "internal"));
+
         factories.put(CANNOT_CHANGE_ACCESS_PRIVILEGE, ChangeVisibilityModifierFix.createFactory());
         factories.put(CANNOT_WEAKEN_ACCESS_PRIVILEGE, ChangeVisibilityModifierFix.createFactory());
 

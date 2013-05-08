@@ -35,14 +35,19 @@ import org.jetbrains.jet.plugin.JetBundle;
 import org.jetbrains.jet.plugin.project.AnalyzerFacadeWithCache;
 
 public class ChangeVisibilityModifierOfDeclarationFix extends JetIntentionAction<PsiElement> {
-    public ChangeVisibilityModifierOfDeclarationFix(@NotNull PsiElement element) {
+    private JetKeywordToken modifier;
+    private String str;
+
+    public ChangeVisibilityModifierOfDeclarationFix(@NotNull PsiElement element, @NotNull JetKeywordToken modifier, @NotNull String str) {
         super(element);
+        this.modifier = modifier;
+        this.str = str;
     }
 
     @NotNull
     @Override
     public String getText() {
-        return JetBundle.message("change.visibility.modifier");
+        return JetBundle.message("change.visibility.modifier") + " to " + str;
     }
 
     @NotNull
@@ -65,19 +70,18 @@ public class ChangeVisibilityModifierOfDeclarationFix extends JetIntentionAction
         if (referenceExpression != null) {
             BindingContext bindingContext = AnalyzerFacadeWithCache.analyzeFileWithCache((JetFile) file).getBindingContext();
             PsiElement declaration = BindingContextUtils.resolveToDeclarationPsiElement(bindingContext, referenceExpression);
-            // TODO - NOT ALWAYS PUBLIC
-            JetKeywordToken modifier = JetTokens.PUBLIC_KEYWORD;
             JetToken[] modifiersThanCanBeReplaced = new JetKeywordToken[] { JetTokens.PUBLIC_KEYWORD, JetTokens.PRIVATE_KEYWORD, JetTokens.PROTECTED_KEYWORD, JetTokens.INTERNAL_KEYWORD };
             declaration.replace(AddModifierFix.addModifier(declaration, modifier, modifiersThanCanBeReplaced, project, true));
         }
     }
 
-    public static JetIntentionActionFactory createFactory() {
+    public static JetIntentionActionFactory createFactory(final JetKeywordToken modifier, final String str) {
+
         return new JetIntentionActionFactory() {
             @Override
             public JetIntentionAction<PsiElement> createAction(Diagnostic diagnostic) {
                 PsiElement element = diagnostic.getPsiElement();
-                return new ChangeVisibilityModifierOfDeclarationFix(element);
+                return new ChangeVisibilityModifierOfDeclarationFix(element, modifier, str);
             }
         };
     }
